@@ -13,6 +13,14 @@ type AccountMap = {
     [key: string]: string
 };
 
+const langEmojiMap = {
+    'rust': ':rust:',
+    'java': ':java:',
+    'golang': ':golang:',
+    'python': ':lang-python:',
+    'python3': ':lang-python:',
+};
+
 async function getLeetcodeAccountMap(): Promise<AccountMap> {
     return (await kv.get(["leetcodeMap"])).value as AccountMap ?? {};
 }
@@ -353,6 +361,8 @@ async function verifySubmission(requestText: string) {
         timeZone: 'Asia/Ho_Chi_Minh',
     }).format(acTime);
 
+    const langEmoji = langEmojiMap[acLang] ?? ':meow_code:';
+
     const requestOptions = {
         method: "POST",
         headers: {
@@ -374,11 +384,11 @@ async function verifySubmission(requestText: string) {
 			        "fields": [
 				        {
 					        "type": "mrkdwn",
-					        "text": `*Language:*\n${acLang}`
+					        "text": `*Language:*\n${langEmoji} ${acLang}`
 				        },
 				        {
 					        "type": "mrkdwn",
-					        "text": `*When:*\n${timeString}`
+					        "text": `*When:*\n:clock1: ${timeString}`
 				        }
 			        ]
 		        }
