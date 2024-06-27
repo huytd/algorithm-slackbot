@@ -3,6 +3,12 @@ const CHANNEL_ID = "C6XNQB6LB";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const kv = await Deno.openKv();
 
+Deno.cron("Send daily challenge", "5 0 * * *", async () => {
+    await sendDailyProblem();
+});
+
+////////////////////////////////////////////////////////////////
+
 type AccountMap = {
     [key: string]: string
 };
@@ -150,7 +156,7 @@ async function sendDailyProblem() {
                             "text": "✅ Tui giải xong rồi!",
                             "emoji": true
                         },
-                        "value": questionTitleSlug,
+                        "value": `[dl]${questionTitleSlug}`,
                         "action_id": "problem_solved"
                     }
                 ]
@@ -181,10 +187,6 @@ async function sendDailyProblem() {
 
         sendMessage(solutionBlocks);
 }
-
-Deno.cron("Send daily challenge", "5 0 * * *", async () => {
-    await sendDailyProblem();
-});
 
 async function handleEnroll(payload: string) {
     const params = new URLSearchParams(payload);
@@ -218,16 +220,60 @@ async function handleEnroll(payload: string) {
     });
 }
 
-async function handleInteract(requestText: string) {
-    try {
-        const leetcodeAccountMap = await getLeetcodeAccountMap();
-        const currentFinishers = ((await kv.get(["finishers"])).value as string ?? "").split(",");
-        const payload = JSON.parse(decodeURIComponent(requestText.replace("payload=", "")));
-        const userId = payload.user.id;
-        const responseUrl = payload.response_url;
-        console.log("ACTION", payload.actions);
+async function verifySubmission(requestText: string) {
+    const leetcodeAccountMap = await getLeetcodeAccountMap();
+    const currentFinishers = ((await kv.get(["finishers"])).value as string ?? "").split(",");
+    const payload = JSON.parse(decodeURIComponent(requestText.replace("payload=", "")));
+    const userId = payload.user.id;
+    const responseUrl = payload.response_url;
+    console.log("ACTION", payload.actions);
 
-        if (!leetcodeAccountMap[userId]) {
+    if (!leetcodeAccountMap[userId]) {
+        const requestOptions = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "application/json"
+            },
+            body: JSON.stringify({
+                "text": "Algorithm Bot chưa có thông tin về account Leetcode của bạn. Vui lòng gõ lệnh `/leetcode <username leetcode của bạn>` để join trước khi điểm danh.",
+                "replace_original": false
+            })
+        };
+        await fetch(responseUrl, requestOptions);
+        return new Response("Dup!", {
+            status: 200,
+            headers: {
+                "content-type": "text/plain; charset=utf-8",
+            },
+        });
+    }
+
+    let acTime = new Date();
+    let acLang = "Unknown";
+    const action = payload.actions[0];
+
+    if (action.action_id == 'problem_solved') {
+        const slug = action.value.replace("[dl]", "").replace("[cl]", "");
+        const acQuery = `
+        query getACSubmissions ($username: String!, $limit: Int) {
+            recentAcSubmissionList(username: $username, limit: $limit) {
+                title
+                titleSlug
+                timestamp
+                statusDisplay
+                lang
+            }
+        }
+        `;
+        const result = await callGraphQL(acQuery, 'getACSubmissions', {
+            username: leetcodeAccountMap[userId],
+            limit: 5
+        });
+
+        const submissions = result.data.recentAcSubmissionList ?? [];
+        const matching = submissions.find(sb => sb.titleSlug == slug);
+        if (!matching) {
             const requestOptions = {
                 method: "POST",
                 headers: {
@@ -235,87 +281,7 @@ async function handleInteract(requestText: string) {
                     "Accept": "application/json"
                 },
                 body: JSON.stringify({
-                    "text": "Algorithm Bot chưa có thông tin về account Leetcode của bạn. Vui lòng gõ lệnh `/leetcode <username leetcode của bạn>` để join trước khi điểm danh.",
-                    "replace_original": false
-                })
-            };
-            await fetch(responseUrl, requestOptions);
-            return new Response("Dup!", {
-                status: 200,
-                headers: {
-                    "content-type": "text/plain; charset=utf-8",
-                },
-            });
-        }
-
-        let acTime = new Date();
-        let acLang = "Unknown";
-        const action = payload.actions[0];
-
-        if (action.action_id == 'problem_solved') {
-            const slug = action.value;
-            const acQuery = `
-            query getACSubmissions ($username: String!, $limit: Int) {
-                recentAcSubmissionList(username: $username, limit: $limit) {
-                    title
-                    titleSlug
-                    timestamp
-                    statusDisplay
-                    lang
-                }
-            }
-            `;
-            const result = await callGraphQL(acQuery, 'getACSubmissions', {
-                username: leetcodeAccountMap[userId],
-                limit: 5
-            });
-
-            const submissions = result.data.recentAcSubmissionList ?? [];
-            const matching = submissions.find(sb => sb.titleSlug == slug);
-            if (!matching) {
-                const requestOptions = {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json; charset=utf-8",
-                        "Accept": "application/json"
-                    },
-                    body: JSON.stringify({
-                        text: "Bạn phải giải xong bài này trên Leetcode rồi mới được điểm danh nha!",
-                        "replace_original": false
-                    })
-                };
-                fetch(responseUrl, requestOptions);
-
-                return new Response("Dup!", {
-                    status: 200,
-                    headers: {
-                        "content-type": "text/plain; charset=utf-8",
-                    },
-                });
-            } else {
-                acTime = new Date(matching.timestamp);
-                acLang = matching.lang?.toUpperCase() ?? "Unknown";
-            }
-        }
-
-        const thread_ts = payload.container.message_ts;
-        const currentTime = new Date();
-        const utcMidnight = new Date(currentTime.getUTCFullYear(), currentTime.getUTCMonth(), currentTime.getUTCDate());
-        utcMidnight.setHours(0, 0, 0, 0);
-        const diffInMilliseconds = acTime - utcMidnight;
-        const diffInHours = diffInMilliseconds / (1000 * 60 * 60);
-        const hourDiff = Math.round(diffInHours);
-        let message = '';
-
-        if (currentFinishers.indexOf(userId) != -1) {
-            const requestOptions = {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify({
-                    text: "Điểm danh một lần thôi nha! :doubt:",
+                    text: "Bạn phải giải xong bài này trên Leetcode rồi mới được điểm danh nha!",
                     "replace_original": false
                 })
             };
@@ -327,8 +293,47 @@ async function handleInteract(requestText: string) {
                     "content-type": "text/plain; charset=utf-8",
                 },
             });
+        } else {
+            acTime = new Date(+matching.timestamp * 1000);
+            acLang = matching.lang?.toLowerCase() ?? "unknown";
         }
+    }
 
+    const thread_ts = payload.container.message_ts;
+    const currentTime = new Date();
+    const utcMidnight = new Date(currentTime.getUTCFullYear(), currentTime.getUTCMonth(), currentTime.getUTCDate());
+    utcMidnight.setHours(0, 0, 0, 0);
+    const diffInMilliseconds = acTime - utcMidnight;
+    const diffInHours = diffInMilliseconds / (1000 * 60 * 60);
+    const hourDiff = Math.round(diffInHours);
+    let message = '';
+
+    const isDaily = action.value.indexOf("[dl]") !== -1;
+
+    if (isDaily && currentFinishers.indexOf(userId) != -1) {
+        const requestOptions = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "application/json"
+            },
+            body: JSON.stringify({
+                text: "Điểm danh một lần thôi nha! :doubt:",
+                "replace_original": false
+            })
+        };
+        fetch(responseUrl, requestOptions);
+
+        return new Response("Dup!", {
+            status: 200,
+            headers: {
+                "content-type": "text/plain; charset=utf-8",
+            },
+        });
+    }
+
+
+    if (isDaily) {
         if (currentFinishers.filter(x => x.length > 0).length < 3) {
             message = `:first_place_medal: <@${userId}> đã giải xong bài!`;
         } else if (hourDiff <= 3) {
@@ -338,37 +343,61 @@ async function handleInteract(requestText: string) {
         } else {
             message = `:kissing_heart: <@${userId}> đã nhận được một nụ hun khích lệ!`;
         }
+    } else {
+        message = `:white_check_mark: <@${userId}> đã giải xong bài!`;
+    }
 
-        const requestOptions = {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json; charset=utf-8",
-                "Accept": "application/json"
-            },
-            body: JSON.stringify({
-                text: message,
-                blocks: [
-		            {
-			            "type": "section",
-			            "fields": [
-				            {
-					            "type": "mrkdwn",
-					            "text": `*Language:*\n${acLang}`
-				            },
-				            {
-					            "type": "mrkdwn",
-					            "text": `*When:*\n${acTime.toUTCString()}`
-				            }
-			            ]
-		            }
-                ],
-                "response_type": "in_channel",
-                "replace_original": false,
-                "thread_ts": thread_ts
-            })
-        };
-        fetch(responseUrl, requestOptions);
+    const timeString = new Intl.DateTimeFormat('vi-VN', {
+        dateStyle: 'short',
+        timeStyle: 'medium',
+        timeZone: 'Asia/Ho_Chi_Minh',
+    }).format(acTime);
+
+    const requestOptions = {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Accept": "application/json"
+        },
+        body: JSON.stringify({
+            text: message,
+            blocks: [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": message
+                    }
+                },
+		        {
+			        "type": "section",
+			        "fields": [
+				        {
+					        "type": "mrkdwn",
+					        "text": `*Language:*\n${acLang}`
+				        },
+				        {
+					        "type": "mrkdwn",
+					        "text": `*When:*\n${timeString}`
+				        }
+			        ]
+		        }
+            ],
+            "response_type": "in_channel",
+            "replace_original": false,
+            "thread_ts": thread_ts
+        })
+    };
+    fetch(responseUrl, requestOptions);
+
+    if (isDaily) {
         kv.set(["finishers"], currentFinishers.filter(x => x.length > 0).concat(userId).join(","));
+    }
+}
+
+function handleInteract(requestText: string) {
+    try {
+        verifySubmission(requestText);
 
         return new Response("Cool", {
             status: 200,
@@ -385,6 +414,114 @@ async function handleTest() {
     await sendDailyProblem();
 }
 
+async function handleChallenge(payload: string) {
+    const params = new URLSearchParams(payload);
+    // Example: https://leetcode.com/problems/balance-a-binary-search-tree/
+    const link = params.get('text') ?? "";
+    const userId = params.get('user_id') ?? "";
+    const slug = link.replace("https://leetcode.com/problems/", "").replace("/", "");
+
+    if (!slug) {
+        return new Response(JSON.stringify({
+            "response_type": "ephemeral",
+            "text": "Không tìm thấy câu hỏi mà bạn yêu cầu! Vui lòng kiểm tra lại link."
+        }), {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+
+    const query = `
+    query questionTitle($titleSlug: String!) {
+        question(titleSlug: $titleSlug) {
+            questionId
+            questionFrontendId
+            title
+            titleSlug
+            difficulty
+            acRate
+        }
+    }
+    `;
+    const result = await callGraphQL(query, 'questionTitle', {
+        titleSlug: slug
+    });
+
+    const data = result?.data?.question;
+    if (!data) {
+        return new Response(JSON.stringify({
+            "response_type": "ephemeral",
+            "text": "Không tìm thấy câu hỏi mà bạn yêu cầu! Vui lòng kiểm tra lại link."
+        }), {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+
+    const questionId = data.questionId;
+    const questionTitle = data.title;
+    const title = `[${data.difficulty}] ${questionId}. ${questionTitle}`;
+    const acRate = `${data.acRate.toFixed(2)}%`;
+
+    let emoji = ":easy-2:";
+    switch (data.difficulty.toLowerCase()) {
+        case 'medium':
+            emoji = ":medium-2:";
+        break;
+        case 'hard':
+            emoji = ":hard-2:"
+        break;
+    }
+
+    const blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": `<@${userId}> đã tạo một challenge mới:`
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": `${emoji} *${title}*\nLink: ${link}\nAccept Rate: ${acRate}`
+            }
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Giải xong!",
+                        "emoji": true
+                    },
+                    "value": `[cl]${slug}`,
+                    "action_id": "problem_solved"
+                }
+            ]
+        }
+    ];
+
+    sendMessage(blocks);
+
+    return new Response(JSON.stringify({
+        "response_type": "ephemeral",
+        "text": "Challenge started!"
+    }), {
+        status: 200,
+        headers: {
+            "content-type": "application/json",
+        },
+    });
+}
+
 Deno.serve(async (req: Request) => {
     console.log("Method:", req.method);
 
@@ -398,12 +535,17 @@ Deno.serve(async (req: Request) => {
 
     if (url.pathname == '/interact' && req.method == 'POST') {
         const body = await req.text() || "";
-        return await handleInteract(body);
+        return handleInteract(body);
     }
 
     if (url.pathname == '/enroll' && req.method == 'POST') {
         const body = await req.text();
         return await handleEnroll(body);
+    }
+
+    if (url.pathname == '/challenge' && req.method == 'POST') {
+        const body = await req.text();
+        return await handleChallenge(body);
     }
 
     return new Response("Hello, world", {
@@ -413,3 +555,4 @@ Deno.serve(async (req: Request) => {
         },
     });
 });
+
