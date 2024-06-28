@@ -1,5 +1,5 @@
 const SLACK_BOT_TOKEN = Deno.env.get("SLACK_TOKEN") || "";
-const CHANNEL_ID = "C6XNQB6LB";
+const CHANNEL_ID = "C6XNQB6LB"; // #algorithm channel
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const kv = await Deno.openKv();
 
@@ -21,6 +21,7 @@ const langEmojiMap = {
     'python3': ':lang-python:',
     'ruby': ':ruby:',
     'javascript': ':js:',
+    'swift': ':lang-swift:',
 };
 
 async function getLeetcodeAccountMap(): Promise<AccountMap> {
@@ -431,7 +432,9 @@ async function handleChallenge(payload: string) {
     // Example: https://leetcode.com/problems/balance-a-binary-search-tree/
     const link = params.get('text') ?? "";
     const userId = params.get('user_id') ?? "";
-    const slug = link.replace("https://leetcode.com/problems/", "").replace("/", "");
+    const slug = link.replace("https://leetcode.com/problems/", "")
+                     .replace("description/", "")
+                     .replace("/", "");
 
     if (!slug) {
         return new Response(JSON.stringify({

@@ -21,22 +21,29 @@ async function callGraphQL(query: string, operationName: string, variables?: obj
     return await response.json();
 }
 
-const acQuery = `
-query getACSubmissions ($username: String!, $limit: Int) {
-    recentAcSubmissionList(username: $username, limit: $limit) {
-        title
-        titleSlug
-        timestamp
-        statusDisplay
-        lang
-    }
-}
-`;
-const result = await callGraphQL(acQuery, 'getACSubmissions', {
-    username: 'huytd189',
-    limit: 5
-});
+// const acQuery = `
+// query getACSubmissions ($username: String!, $limit: Int) {
+//     recentAcSubmissionList(username: $username, limit: $limit) {
+//         title
+//         titleSlug
+//         timestamp
+//         statusDisplay
+//         lang
+//     }
+// }
+// `;
+// const result = await callGraphQL(acQuery, 'getACSubmissions', {
+//     username: 'huytd189',
+//     limit: 5
+// });
+//
 
+const contentQuery = `
+    query questionContent($titleSlug: String!) {  question(titleSlug: $titleSlug) {    content    mysqlSchemas    dataSchemas  }}
+`;
+const result = await callGraphQL(contentQuery, 'questionContent', {
+    titleSlug: 'add-bold-tag-in-string'
+});
 console.log(result);
 
 /*
