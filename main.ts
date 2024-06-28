@@ -19,6 +19,8 @@ const langEmojiMap = {
     'golang': ':golang:',
     'python': ':lang-python:',
     'python3': ':lang-python:',
+    'ruby': ':ruby:',
+    'javascript': ':js:',
 };
 
 async function getLeetcodeAccountMap(): Promise<AccountMap> {
