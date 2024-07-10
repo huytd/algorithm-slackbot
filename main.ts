@@ -1,5 +1,8 @@
 const SLACK_BOT_TOKEN = Deno.env.get("SLACK_TOKEN") || "";
-const CHANNEL_ID = "C6XNQB6LB"; // #algorithm channel
+const CHANNEL_ID = Deno.env.get("SLACK_CHANNEL") || "C6XNQB6LB";
+
+if (!SLACK_BOT_TOKEN || !CHANNEL_ID) throw new Error("Tumakia");
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const kv = await Deno.openKv();
 
@@ -23,6 +26,92 @@ const langEmojiMap = {
     'javascript': ':js:',
     'swift': ':lang-swift:',
 };
+
+const QUESTION_SETS = {
+    "GOOGLE": [683, 388, 308, 681, 843, 818, 366, 489, 1057, 359, 929, 1007, 1153, 288, 2096, 1293, 562, 418, 1088,
+        1610, 727, 1, 482, 544, 158, 833, 753, 351, 809, 2158, 642, 1146, 298, 2034, 904, 975, 361, 1066, 340,
+        777, 939, 1110, 299, 253, 393, 679, 1231, 159, 425, 246, 294, 568, 1937, 729, 715, 1240, 900, 1548, 394,
+        200, 68, 1055, 280, 803, 329, 281, 163, 315, 1376, 1048, 157, 379, 528, 616, 844, 951, 218, 1087, 737,
+        1032, 56, 317, 399, 410, 42, 465, 444, 284, 346, 360, 320, 690, 524, 1096, 406, 837, 247, 552, 774, 734,
+        686, 302, 305, 353, 792, 2007, 913, 857, 593, 1277, 296, 1423, 146, 269, 1618, 362, 659, 271, 1834, 1138,
+        849, 1145, 85, 2, 2402, 1254, 947, 549, 1706, 407, 527, 2013, 2458, 1168, 384, 1477, 2162, 4, 1170, 363,
+        149, 1136, 539, 2713, 1197, 2115, 731, 1499, 403, 1244, 490, 417, 276, 759, 1825, 369, 1966, 295, 871,
+        17, 687, 772, 800, 1406, 2242, 447, 788, 375, 2135, 428, 222, 2101, 419, 963, 289, 10, 221, 604, 140,
+        752, 150, 505, 2178, 166, 1368, 23, 1438, 354, 766, 1504, 911, 2421, 2700, 259, 297, 745, 3, 5, 66, 1525,
+        224, 935, 981, 13, 695, 332, 336, 1345, 855, 732, 1776, 1592, 139, 1352, 279, 1296, 894, 62, 1102, 226,
+        2366, 391, 239, 692, 293, 365, 341, 15, 337, 497, 249, 609, 652, 1292, 2172, 835, 726, 57, 1074, 41,
+        1056, 127, 1237, 91, 400, 380, 76, 840, 128, 20, 767, 1101, 846, 1377, 278, 702, 587, 1526, 241, 22, 710,
+        54, 208, 636, 212, 124, 934, 11, 53, 31, 37, 411, 2416, 215, 43, 778, 853, 318, 324, 356, 463, 808, 38,
+        202, 721, 282, 460, 316, 358, 1996, 370, 486, 173, 551, 210, 889, 458, 34, 1263, 2188, 252, 420, 7, 1024,
+        401, 1631, 459, 286, 1219, 932, 1632, 968, 72, 228, 79, 1564, 266, 121, 815, 847, 300, 1218, 33, 14, 84,
+        758, 205, 1044, 834, 588, 743, 50, 1207, 2018, 223, 560, 2174, 839, 676, 685, 48, 18, 133, 973, 187, 845,
+        348, 168, 162, 1320, 378, 776, 708, 769, 621, 1770, 1105, 70, 287, 498, 64, 198, 96, 251, 137, 261, 301,
+        138, 1000, 2667, 44, 949, 236, 273, 448, 469, 1858, 484, 1444, 32, 1272, 229, 475, 21, 852, 347, 211,
+        233, 424, 1094, 207, 415, 979, 322, 862, 174, 1642, 954, 345, 535, 2437, 395, 940, 2235, 890, 1165, 1483,
+        134, 990, 49, 155, 1387, 1606, 220, 1553, 9, 1235, 274, 240, 312, 480, 542, 71, 1506, 126, 887, 327,
+        1885, 1014, 135, 97, 206, 8, 214, 1314, 832, 2842, 36, 427, 2337, 334, 193, 1233, 46, 412, 1820, 1121,
+        1728, 2936, 875, 2271, 227, 2332, 1730, 63, 1091, 143, 719, 310, 116, 1206, 980, 2092, 684, 658, 118,
+        343, 2407, 25, 55, 270, 115, 389, 735, 1793, 760, 88, 382, 2184, 438, 264, 283, 442, 977, 2265, 1756,
+        518, 95, 78, 1697, 799, 830, 543, 1062, 941, 323, 1970, 238, 98, 29, 501, 1286, 733, 665, 914, 564, 1275,
+        1011, 878, 2025, 69, 387, 2258, 93, 392, 344, 188, 373, 51, 421, 1036, 89, 655, 1987, 213, 45, 1155, 416,
+        12, 2305, 919, 1480, 131, 1268, 217, 806, 540, 1307, 1740, 1162, 787, 349, 938, 741, 1866, 16, 1027, 169,
+        864, 771, 1658, 2131, 94, 101, 1807, 2088, 234, 39, 525, 152, 104, 1326, 1616, 2316, 67, 1125, 2035, 190,
+        446, 556, 739, 1255, 782, 1494, 2313, 136, 303, 409, 99, 1220, 167, 105, 209, 2103, 2345, 1854, 644, 909,
+        368, 756, 2276, 102, 1316, 309, 26, 647, 1386, 1768, 100, 30, 748],
+    "FACEBOOK": [1249, 953, 301, 314, 680, 1570, 158, 1762, 1428, 273, 1650, 339, 408, 528, 973, 426, 227, 938, 560,
+        157, 311, 269, 415, 253, 65, 215, 67, 636, 71, 282, 249, 670, 236, 297, 523, 317, 56, 173, 986, 278, 1891, 791,
+        921, 708, 325, 621, 398, 23, 246, 199, 31, 140, 91, 50, 498, 346, 304, 689, 270, 543, 721, 10, 138, 146, 133,
+        616, 211, 125, 76, 987, 161, 238, 766, 200, 15, 827, 29, 438, 124, 266, 348, 1060, 139, 283, 42, 489, 1091, 34,
+        162, 277, 347, 341, 17, 88, 43, 163, 536, 825, 824, 896, 286, 691, 247, 129, 1, 863, 1047, 1216, 1197, 78, 597,
+        529, 257, 114, 1522, 419, 378, 463, 1344, 98, 2060, 977, 658, 285, 515, 958, 772, 865, 380, 1123, 1213, 33, 785,
+        224, 8, 393, 647, 695, 1209, 349, 329, 333, 381, 1539, 127, 1868, 20, 767, 121, 296, 1424, 116, 1206, 490, 622,
+        1004, 79, 332, 1382, 934, 38, 1026, 480, 556, 468, 143, 674, 319, 3, 545, 2, 252, 692, 494, 694, 32, 126, 53, 5,
+        13, 218, 477, 16, 22, 207, 394, 416, 1011, 19, 39, 295, 4, 239, 642, 406, 1644, 212, 46, 525, 983, 21, 1113,
+        724, 727, 49, 57, 111, 1541, 51, 1944, 1142, 1094, 103, 1242, 300, 428, 93, 14, 919, 102, 778, 1305, 54, 68,
+        1245, 1439, 92, 1559, 117, 739, 75, 637, 234, 384, 1132, 11, 206, 1740, 1110, 399, 430, 240, 1498, 219, 230,
+        105, 323, 387, 62, 41, 303, 1055, 678, 24, 676, 203, 44, 73, 271, 113, 235, 388, 1460, 208, 48, 25, 350, 617,
+        18, 223, 267, 74, 122, 1264, 443, 1443, 435, 209, 460, 241, 26, 540, 1331, 63, 639, 605, 210, 128, 153, 84,
+        1361, 1161, 160, 47, 7, 763, 1293, 85, 2365, 72, 688, 36, 554, 437, 148, 112, 974, 1287, 836, 66, 101, 698,
+        1454, 706, 711, 703, 593, 503, 55, 1322, 94, 191, 28, 151, 334, 442, 90, 875, 852, 687, 1029, 152, 572, 265,
+        260, 242, 1379, 1973, 322, 496, 538, 857, 367, 2667, 40, 993, 735, 1353, 155, 69, 1008, 1854, 1398, 715, 1445,
+        310, 328, 905, 198, 578, 377, 287, 602, 461, 1108, 518, 1757, 787, 581, 299, 131, 1373, 136, 95, 417, 12, 410,
+        662, 1186, 404, 70, 150, 2210, 713, 779, 145, 6, 448, 45, 168, 167, 9, 633, 1241, 189, 261, 2265, 268, 1013,
+        344, 750, 190, 1352, 2096, 547, 100, 424, 1122, 104, 188, 110, 2303, 450, 337, 1586, 904, 383, 412, 2281, 1748,
+        1043, 289, 402, 169, 1225, 118, 918, 704, 995, 262, 135, 968, 535, 733, 217, 989, 1002, 1778, 202, 451, 1963,
+        392, 221, 386, 130, 797, 557],
+    "AMAZON": [937, 2272, 1041, 200, 146, 1192, 1152, 828, 2281, 819, 973, 1, 472, 957, 763, 253, 42, 1465, 1335, 642,
+        138, 5, 2214, 1268, 1710, 23, 692, 1010, 588, 127, 140, 273, 994, 1167, 295, 926, 348, 2, 1597, 297, 56, 269,
+        1628, 696, 212, 545, 767, 460, 17, 21, 239, 4, 3, 863, 1567, 1120, 139, 20, 103, 2781, 694, 121, 53, 572, 49,
+        79, 240, 772, 2104, 15, 2355, 1044, 54, 449, 277, 210, 380, 1730, 11, 126, 323, 445, 236, 675, 165, 155, 207,
+        1102, 48, 41, 362, 33, 1972, 22, 13, 12, 2055, 315, 227, 1135, 1429, 490, 215, 909, 695, 238, 2193, 116, 1000,
+        347, 322, 84, 25, 221, 2340, 341, 76, 224, 91, 1099, 438, 1603, 340, 218, 632, 387, 98, 2262, 124, 31, 733, 547,
+        895, 560, 2222, 99, 394, 134, 706, 289, 535, 1279, 55, 314, 45, 206, 716, 688, 818, 36, 1197, 105, 2102, 815,
+        907, 403, 287, 2268, 489, 505, 1353, 143, 1492, 32, 987, 378, 70, 51, 556, 243, 1155, 14, 74, 117, 78, 442, 10,
+        109, 18, 286, 208, 88, 93, 503, 149, 735, 399, 1344, 538, 836, 234, 2398, 1481, 564, 102, 332, 529, 46, 252,
+        1275, 1479, 62, 719, 101, 16, 7, 543, 739, 2357, 496, 199, 316, 336, 198, 179, 122, 640, 1091, 420, 1209, 24,
+        1244, 337, 1094, 135, 1360, 128, 329, 407, 1235, 711, 366, 64, 698, 92, 381, 8, 223, 663, 123, 96, 2221, 406,
+        301, 211, 152, 173, 50, 177, 268, 603, 72, 150, 118, 992, 19, 34, 993, 983, 540, 1100, 871, 981, 279, 852, 133,
+        456, 658, 39, 1011, 235, 721, 300, 59, 176, 528, 346, 85, 428, 622, 901, 37, 979, 1083, 419, 2096, 1792, 1032,
+        889, 159, 432, 1233, 217, 849, 703, 317, 38, 113, 1511, 73, 412, 437, 181, 1130, 417, 934, 681, 131, 6, 410,
+        518, 402, 75, 193, 1864, 582, 2386, 894, 97, 636, 581, 71, 395, 752, 162, 682, 617, 160, 169, 621, 997, 185,
+        1291, 430, 344, 188, 44, 312, 63, 9, 304, 161, 875, 729, 261, 443, 1339, 1293, 542, 523, 136, 232, 516, 339, 95,
+        349, 1219, 262, 157, 186, 1026, 333, 2244, 226, 628, 1740, 2519, 167, 141, 498, 299, 373, 244, 1207, 1531, 108,
+        779, 856, 935, 29, 57, 653, 662, 270, 114, 1249, 68, 480, 1772, 1480, 690, 797, 463, 1019, 153, 112, 278, 205,
+        202, 1723, 2100, 787, 532, 137, 242, 148, 43, 754, 1038, 204, 953, 187, 230, 587, 465, 881, 823, 1110, 847,
+        1143, 977, 618, 120, 1254, 557, 28, 920, 328, 354, 609, 968, 525, 974, 1569, 69, 1046, 579, 887, 426, 450, 319,
+        283, 773, 647, 1002, 1405, 468, 493, 785, 424, 841, 1315, 175, 100, 508, 132, 1454, 718, 26, 652, 646, 363,
+        1751, 448, 1470, 838, 81, 1345, 2294, 307, 986, 377, 1395, 359, 421, 670, 1834, 1086, 1846, 1497, 189, 1047,
+        1022, 415, 257, 106, 1146, 678, 715, 104, 669, 241, 168, 1420, 1029, 1220, 83, 1202, 2219, 1062, 1214, 142, 567,
+        1376, 151, 1122, 30, 2667, 67, 1438, 827, 40, 94, 184, 2385, 107, 90, 1060, 61, 1008, 371, 171, 2870, 86, 2825,
+        203, 229, 904, 82, 814, 720, 130, 393, 1768, 416, 725, 905, 192, 174, 494, 2141, 665, 724, 946, 429, 110, 1383,
+        826, 233, 413, 771, 1472, 742, 1889, 746, 1574, 1081, 1699, 611, 486, 1571, 1396, 2482, 876, 1326, 309, 2405,
+        409, 740, 1372, 844, 509, 704, 1523, 1636, 209, 1838, 938, 2235, 47, 515, 1329, 680, 1109, 458, 1923, 1761,
+        1382, 310, 2130, 129, 2256, 60, 912, 237, 1337, 2115, 386, 225, 1225, 2110, 1074, 178, 1647, 1373, 743, 1191,
+        180, 475, 959, 775, 888, 1642, 2111, 318, 918, 867, 731, 1351, 35, 880, 1119, 1478, 1727, 1658, 1043, 453, 343,
+        338, 65, 2551, 260, 791, 799, 66, 1082, 435, 958, 929, 502, 1811, 1312, 1706, 1498, 219, 741, 1650, 1171, 1757,
+        383, 1485, 1588, 1823, 125, 707, 527, 2125, 1359]
+
+}
 
 async function getLeetcodeAccountMap(): Promise<AccountMap> {
     return (await kv.get(["leetcodeMap"])).value as AccountMap ?? {};
@@ -55,7 +144,7 @@ async function sendMessage(blocks: object) {
     // Construct the URL for the Slack API endpoint
     const url = `https://slack.com/api/chat.postMessage`;
     // Convert the blocks array to a JSON string
-    const payload = JSON.stringify({ channel: CHANNEL_ID, blocks });
+    const payload = JSON.stringify({channel: CHANNEL_ID, blocks});
 
     // Set up the HTTP POST request options
     const requestOptions = {
@@ -115,88 +204,88 @@ async function sendDailyProblem() {
         }}
         `;
 
-        const result = await callGraphQL(query, 'questionOfToday');
-        const data = result.data.activeDailyCodingChallengeQuestion;
-        const date = new Date(data.date);
-        const url = `https://leetcode.com${data.link}`;
-        const questionId = data.question.frontendQuestionId;
-        const questionTitle = data.question.title;
-        const questionTitleSlug = data.question.titleSlug;
-        const title = `[${data.question.difficulty}] ${questionId}. ${questionTitle}`;
-        const acRate = `${data.question.acRate.toFixed(2)}%`;
-        let emoji = ":easy-2:";
-        switch (data.question.difficulty.toLowerCase()) {
-            case 'medium':
-                emoji = ":medium-2:";
+    const result = await callGraphQL(query, 'questionOfToday');
+    const data = result.data.activeDailyCodingChallengeQuestion;
+    const date = new Date(data.date);
+    const url = `https://leetcode.com${data.link}`;
+    const questionId = data.question.frontendQuestionId;
+    const questionTitle = data.question.title;
+    const questionTitleSlug = data.question.titleSlug;
+    const title = `[${data.question.difficulty}] ${questionId}. ${questionTitle}`;
+    const acRate = `${data.question.acRate.toFixed(2)}%`;
+    let emoji = ":easy-2:";
+    switch (data.question.difficulty.toLowerCase()) {
+        case 'medium':
+            emoji = ":medium-2:";
             break;
-            case 'hard':
-                emoji = ":hard-2:"
+        case 'hard':
+            emoji = ":hard-2:"
             break;
+    }
+
+    const blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": `🗓️ Leetcode Daily - ${date.toDateString()}`,
+                "emoji": true
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": `${emoji} *${title}*\nLink: ${url}\nAccept Rate: ${acRate}`
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Bạn đã làm xong bài hôm nay chưa? Điểm danh nào"
+            }
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "✅ Tui giải xong rồi!",
+                        "emoji": true
+                    },
+                    "value": `[dl]${questionTitleSlug}`,
+                    "action_id": "problem_solved"
+                }
+            ]
         }
+    ];
 
-        const blocks = [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": `🗓️ Leetcode Daily - ${date.toDateString()}`,
-                    "emoji": true
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": `${emoji} *${title}*\nLink: ${url}\nAccept Rate: ${acRate}`
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "Bạn đã làm xong bài hôm nay chưa? Điểm danh nào"
-                }
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "✅ Tui giải xong rồi!",
-                            "emoji": true
-                        },
-                        "value": `[dl]${questionTitleSlug}`,
-                        "action_id": "problem_solved"
-                    }
-                ]
+    sendMessage(blocks);
+
+    const solutionBlocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": `:solution: Solution Discuss - ${date.toDateString()}`,
+                "emoji": true
             }
-        ];
-
-        sendMessage(blocks);
-
-        const solutionBlocks = [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": `:solution: Solution Discuss - ${date.toDateString()}`,
-                    "emoji": true
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": `Thread thảo luận solution cho bài *${questionId}. ${questionTitle}*`
-                }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": `Thread thảo luận solution cho bài *${questionId}. ${questionTitle}*`
             }
-        ];
+        }
+    ];
 
-        await sleep(1000);
+    await sleep(1000);
 
-        sendMessage(solutionBlocks);
+    sendMessage(solutionBlocks);
 }
 
 async function handleEnroll(payload: string) {
@@ -382,19 +471,19 @@ async function verifySubmission(requestText: string) {
                         "text": message
                     }
                 },
-		        {
-			        "type": "section",
-			        "fields": [
-				        {
-					        "type": "mrkdwn",
-					        "text": `*Language:*\n${langEmoji} ${acLang}`
-				        },
-				        {
-					        "type": "mrkdwn",
-					        "text": `*When:*\n:clock1: ${timeString}`
-				        }
-			        ]
-		        }
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": `*Language:*\n${langEmoji} ${acLang}`
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": `*When:*\n:clock1: ${timeString}`
+                        }
+                    ]
+                }
             ],
             "response_type": "in_channel",
             "replace_original": false,
@@ -427,27 +516,7 @@ async function handleTest() {
     await sendDailyProblem();
 }
 
-async function handleChallenge(payload: string) {
-    const params = new URLSearchParams(payload);
-    // Example: https://leetcode.com/problems/balance-a-binary-search-tree/
-    const link = params.get('text') ?? "";
-    const userId = params.get('user_id') ?? "";
-    const slug = link.replace("https://leetcode.com/problems/", "")
-                     .replace("description/", "")
-                     .replace("/", "");
-
-    if (!slug) {
-        return new Response(JSON.stringify({
-            "response_type": "ephemeral",
-            "text": "Không tìm thấy câu hỏi mà bạn yêu cầu! Vui lòng kiểm tra lại link."
-        }), {
-            status: 200,
-            headers: {
-                "content-type": "application/json",
-            },
-        });
-    }
-
+async function handleChallenge(slug: string, link: string, userId: string) {
     const query = `
     query questionTitle($titleSlug: String!) {
         question(titleSlug: $titleSlug) {
@@ -486,10 +555,10 @@ async function handleChallenge(payload: string) {
     switch (data.difficulty.toLowerCase()) {
         case 'medium':
             emoji = ":medium-2:";
-        break;
+            break;
         case 'hard':
             emoji = ":hard-2:"
-        break;
+            break;
     }
 
     const blocks = [
@@ -537,6 +606,72 @@ async function handleChallenge(payload: string) {
     });
 }
 
+async function handlePickup(questionSet: string) {
+    const availableQuestionSets = Object.keys(QUESTION_SETS);
+    if (!questionSet || availableQuestionSets.indexOf(questionSet) == -1) {
+        return new Response(JSON.stringify({
+            "response_type": "ephemeral",
+            "text": `Hãy chọn một set câu hỏi để pickup! Valid sets: ${availableQuestionSets.join(", ")}`
+        }), {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+
+    const questions = QUESTION_SETS[questionSet];
+    const questionFrontEndId = questions[Math.floor(Math.random() * questions.length)];
+    const query = `
+      query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
+        problemsetQuestionList: questionList(
+          categorySlug: $categorySlug
+          limit: $limit
+          skip: $skip
+          filters: $filters
+        ) {
+          total: totalNum
+          questions: data {
+            questionId
+            questionFrontendId
+            title
+            titleSlug
+            difficulty
+            acRate
+          }
+        }
+      }
+    `;
+    const result = await callGraphQL(query, 'problemsetQuestionList', {
+        categorySlug: "all-code-essentials",
+        limit: 100,
+        skip: questionFrontEndId - 50,
+        filters: {}
+    });
+
+    const data = result?.data?.problemsetQuestionList?.questions?.find(q => q.questionFrontendId == questionFrontEndId);
+    if (!data) {
+        return new Response(JSON.stringify({
+            "response_type": "ephemeral",
+            "text": "Không tìm thấy câu hỏi mà bạn yêu cầu! Vui lòng thử lại."
+        }), {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+    return new Response(JSON.stringify({
+        "response_type": "ephemeral",
+        "text": `Làm câu này đi: [${data.difficulty}] ${data.questionFrontendId}. ${data.title}\nhttps://leetcode.com/problems/${data.titleSlug}/`
+    }), {
+        status: 200,
+        headers: {
+            "content-type": "application/json",
+        },
+    });
+}
+
 Deno.serve(async (req: Request) => {
     console.log("Method:", req.method);
 
@@ -560,7 +695,32 @@ Deno.serve(async (req: Request) => {
 
     if (url.pathname == '/challenge' && req.method == 'POST') {
         const body = await req.text();
-        return await handleChallenge(body);
+        const params = new URLSearchParams(body);
+        const userId = params.get('user_id') ?? "";
+        // Example: https://leetcode.com/problems/balance-a-binary-search-tree/
+        const link = params.get('text') ?? "";
+
+        if (link.indexOf("leetcode.com") !== -1) {
+            const slug = link.replace("https://leetcode.com/problems/", "")
+            .replace("description/", "")
+            .replace("/", "");
+
+            if (!slug) {
+                return new Response(JSON.stringify({
+                    "response_type": "ephemeral",
+                    "text": "Không tìm thấy câu hỏi mà bạn yêu cầu! Vui lòng kiểm tra lại link."
+                }), {
+                    status: 200,
+                    headers: {
+                        "content-type": "application/json",
+                    },
+                });
+            }
+
+            return await handleChallenge(slug, link, userId);
+        } else {
+            return await handlePickup(link);
+        }
     }
 
     return new Response("Hello, world", {
@@ -570,4 +730,3 @@ Deno.serve(async (req: Request) => {
         },
     });
 });
-
