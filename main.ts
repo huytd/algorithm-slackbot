@@ -16,6 +16,22 @@ type AccountMap = {
     [key: string]: string
 };
 
+type Question = {
+    questionId: number;
+    questionFrontendId: number;
+    title: string;
+    titleSlug: string;
+    difficulty: string;
+    acRate: number;
+};
+
+type DailyQuestion = {
+    date: string;
+    userStatus: string;
+    link: string;
+    question: Question;
+};
+
 const langEmojiMap = {
     'rust': ':rust:',
     'java': ':java:',
@@ -110,9 +126,15 @@ const QUESTION_SETS = {
         180, 475, 959, 775, 888, 1642, 2111, 318, 918, 867, 731, 1351, 35, 880, 1119, 1478, 1727, 1658, 1043, 453, 343,
         338, 65, 2551, 260, 791, 799, 66, 1082, 435, 958, 929, 502, 1811, 1312, 1706, 1498, 219, 741, 1650, 1171, 1757,
         383, 1485, 1588, 1823, 125, 707, 527, 2125, 1359]
+};
 
-}
+const DIFFICULTY_TO_EMOJI = {
+    "easy": ":easy-2:",
+    "medium": ":medium-2:",
+    "hard": ":hard-2:"
+};
 
+// -------- Helper functions --------
 async function getLeetcodeAccountMap(): Promise<AccountMap> {
     return (await kv.get(["leetcodeMap"])).value as AccountMap ?? {};
 }
@@ -139,6 +161,92 @@ async function callGraphQL(query: string, operationName: string, variables?: obj
 
     return await response.json();
 }
+
+async function getQuestionBySlug(slug: string): Promise<Question> {
+    const query = `
+    query questionTitle($titleSlug: String!) {
+        question(titleSlug: $titleSlug) {
+            questionId
+            questionFrontendId
+            title
+            titleSlug
+            difficulty
+            acRate
+        }
+    }
+    `;
+    const response = await callGraphQL(query, 'questionTitle', {titleSlug: slug});
+    return response?.data?.question;
+}
+
+async function getQuestionById(id: number): Promise<Question> {
+    const query = `
+      query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
+        problemsetQuestionList: questionList(
+          categorySlug: $categorySlug
+          limit: $limit
+          skip: $skip
+          filters: $filters
+        ) {
+          total: totalNum
+          questions: data {
+            questionId
+            questionFrontendId
+            title
+            titleSlug
+            difficulty
+            acRate
+          }
+        }
+      }
+    `;
+
+    const search = async (offset: number): Promise<Question> => {
+        const variables = {
+            categorySlug: "all-code-essentials",
+            limit: 20,
+            skip: offset,
+            filters: {}
+        };
+        const response = await callGraphQL(query, 'problemsetQuestionList', variables);
+        if (response?.data?.problemsetQuestionList?.questions?.length == 0) {
+            // No more questions to search
+            return null;
+        }
+        const question = response?.data?.problemsetQuestionList?.questions?.find(q => q.questionFrontendId == id);
+        return question ?? await search(offset + 20);
+    }
+
+    return search(id - 10);
+}
+
+async function getDailyQuestion(): Promise<DailyQuestion> {
+    const query = `
+    query questionOfToday {
+        activeDailyCodingChallengeQuestion {
+            date
+            userStatus
+            link
+            question {
+                questionId
+                questionFrontendId
+                title
+                titleSlug
+                acRate
+                difficulty
+            }
+        }}
+        `;
+
+    const result = await callGraphQL(query, 'questionOfToday');
+    return result.data.activeDailyCodingChallengeQuestion;
+}
+
+function getEmojiForDifficulty(difficulty: string): string {
+    return DIFFICULTY_TO_EMOJI[difficulty.toLowerCase()] ?? ":easy-2:";
+}
+
+// -------- End Helper functions --------
 
 async function sendMessage(blocks: object) {
     // Construct the URL for the Slack API endpoint
@@ -177,51 +285,15 @@ async function sendMessage(blocks: object) {
 async function sendDailyProblem() {
     await kv.set(["finishers"], "");
 
-    const query = `
-    query questionOfToday {
-        activeDailyCodingChallengeQuestion {
-            date
-            userStatus
-            link
-            question {
-                acRate
-                difficulty
-                freqBar
-                frontendQuestionId: questionFrontendId
-                isFavor
-                paidOnly: isPaidOnly
-                status
-                title
-                titleSlug
-                hasVideoSolution
-                hasSolution
-                topicTags {
-                    name
-                    id
-                    slug
-                }
-            }
-        }}
-        `;
-
-    const result = await callGraphQL(query, 'questionOfToday');
-    const data = result.data.activeDailyCodingChallengeQuestion;
+    const data = await getDailyQuestion();
     const date = new Date(data.date);
     const url = `https://leetcode.com${data.link}`;
-    const questionId = data.question.frontendQuestionId;
+    const questionId = data.question.questionFrontendId;
     const questionTitle = data.question.title;
     const questionTitleSlug = data.question.titleSlug;
     const title = `[${data.question.difficulty}] ${questionId}. ${questionTitle}`;
     const acRate = `${data.question.acRate.toFixed(2)}%`;
-    let emoji = ":easy-2:";
-    switch (data.question.difficulty.toLowerCase()) {
-        case 'medium':
-            emoji = ":medium-2:";
-            break;
-        case 'hard':
-            emoji = ":hard-2:"
-            break;
-    }
+    let emoji = getEmojiForDifficulty(data.question.difficulty);
 
     const blocks = [
         {
@@ -517,49 +589,20 @@ async function handleTest() {
 }
 
 async function handleChallenge(slug: string, link: string, userId: string) {
-    const query = `
-    query questionTitle($titleSlug: String!) {
-        question(titleSlug: $titleSlug) {
-            questionId
-            questionFrontendId
-            title
-            titleSlug
-            difficulty
-            acRate
-        }
-    }
-    `;
-    const result = await callGraphQL(query, 'questionTitle', {
-        titleSlug: slug
-    });
-
-    const data = result?.data?.question;
-    if (!data) {
-        return new Response(JSON.stringify({
+    const question = await getQuestionBySlug(slug);
+    if (!question) {
+        return {
             "response_type": "ephemeral",
             "text": "Không tìm thấy câu hỏi mà bạn yêu cầu! Vui lòng kiểm tra lại link."
-        }), {
-            status: 200,
-            headers: {
-                "content-type": "application/json",
-            },
-        });
+        };
     }
 
-    const questionId = data.questionId;
-    const questionTitle = data.title;
-    const title = `[${data.difficulty}] ${questionId}. ${questionTitle}`;
-    const acRate = `${data.acRate.toFixed(2)}%`;
+    const questionId = question.questionFrontendId;
+    const questionTitle = question.title;
+    const title = `[${question.difficulty}] ${questionId}. ${questionTitle}`;
+    const acRate = `${question.acRate.toFixed(2)}%`;
 
-    let emoji = ":easy-2:";
-    switch (data.difficulty.toLowerCase()) {
-        case 'medium':
-            emoji = ":medium-2:";
-            break;
-        case 'hard':
-            emoji = ":hard-2:"
-            break;
-    }
+    let emoji = getEmojiForDifficulty(question.difficulty);
 
     const blocks = [
         {
@@ -595,81 +638,34 @@ async function handleChallenge(slug: string, link: string, userId: string) {
 
     sendMessage(blocks);
 
-    return new Response(JSON.stringify({
+    return {
         "response_type": "ephemeral",
         "text": "Challenge started!"
-    }), {
-        status: 200,
-        headers: {
-            "content-type": "application/json",
-        },
-    });
+    };
 }
 
 async function handlePickup(questionSet: string) {
     const availableQuestionSets = Object.keys(QUESTION_SETS);
     if (!questionSet || availableQuestionSets.indexOf(questionSet) == -1) {
-        return new Response(JSON.stringify({
+        return {
             "response_type": "ephemeral",
             "text": `Hãy chọn một set câu hỏi để pickup! Valid sets: ${availableQuestionSets.join(", ")}`
-        }), {
-            status: 200,
-            headers: {
-                "content-type": "application/json",
-            },
-        });
+        };
     }
 
     const questions = QUESTION_SETS[questionSet];
     const questionFrontEndId = questions[Math.floor(Math.random() * questions.length)];
-    const query = `
-      query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
-        problemsetQuestionList: questionList(
-          categorySlug: $categorySlug
-          limit: $limit
-          skip: $skip
-          filters: $filters
-        ) {
-          total: totalNum
-          questions: data {
-            questionId
-            questionFrontendId
-            title
-            titleSlug
-            difficulty
-            acRate
-          }
-        }
-      }
-    `;
-    const result = await callGraphQL(query, 'problemsetQuestionList', {
-        categorySlug: "all-code-essentials",
-        limit: 100,
-        skip: questionFrontEndId - 50,
-        filters: {}
-    });
-
-    const data = result?.data?.problemsetQuestionList?.questions?.find(q => q.questionFrontendId == questionFrontEndId);
+    const data = await getQuestionById(questionFrontEndId);
     if (!data) {
-        return new Response(JSON.stringify({
+        return {
             "response_type": "ephemeral",
             "text": "Không tìm thấy câu hỏi mà bạn yêu cầu! Vui lòng thử lại."
-        }), {
-            status: 200,
-            headers: {
-                "content-type": "application/json",
-            },
-        });
+        };
     }
-    return new Response(JSON.stringify({
+    return {
         "response_type": "ephemeral",
         "text": `Làm câu này đi: [${data.difficulty}] ${data.questionFrontendId}. ${data.title}\nhttps://leetcode.com/problems/${data.titleSlug}/`
-    }), {
-        status: 200,
-        headers: {
-            "content-type": "application/json",
-        },
-    });
+    };
 }
 
 Deno.serve(async (req: Request) => {
@@ -702,8 +698,8 @@ Deno.serve(async (req: Request) => {
 
         if (link.indexOf("leetcode.com") !== -1) {
             const slug = link.replace("https://leetcode.com/problems/", "")
-            .replace("description/", "")
-            .replace("/", "");
+                .replace("description/", "")
+                .replace("/", "");
 
             if (!slug) {
                 return new Response(JSON.stringify({
@@ -717,9 +713,21 @@ Deno.serve(async (req: Request) => {
                 });
             }
 
-            return await handleChallenge(slug, link, userId);
+            const responseContent = await handleChallenge(slug, link, userId);
+            return new Response(JSON.stringify(responseContent), {
+                status: 200,
+                headers: {
+                    "content-type": "application/json",
+                }
+            });
         } else {
-            return await handlePickup(link);
+            const responseContent = await handlePickup(link);
+            return new Response(JSON.stringify(responseContent), {
+                status: 200,
+                headers: {
+                    "content-type": "application/json",
+                }
+            });
         }
     }
 
