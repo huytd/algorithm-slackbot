@@ -139,6 +139,10 @@ async function getLeetcodeAccountMap(): Promise<AccountMap> {
     return (await kv.get(["leetcodeMap"])).value as AccountMap ?? {};
 }
 
+async function getSubscriberAccounts(): Promise<string[]>{
+    return (await kv.get(["subscriberKey"])).value as string[] ?? [];
+}
+
 async function callGraphQL(query: string, operationName: string, variables?: object) {
     const url = 'https://leetcode.com/graphql'; // Replace with your actual GraphQL endpoint
     const response = await fetch(url, {
@@ -293,6 +297,12 @@ async function sendDailyProblem() {
     const questionTitleSlug = data.question.titleSlug;
     const title = `[${data.question.difficulty}] ${questionId}. ${questionTitle}`;
     const acRate = `${data.question.acRate.toFixed(2)}%`;
+    const subscribedUsersData = await getSubscriberAccounts();
+    const formattedSubscribedUsers = subscribedUsersData.map(user => `<@${user}>`).join(' ');
+    const subscriberMentioningMessage = subscribedUsersData.length
+                    ? `Hey ${formattedSubscribedUsers}, Zô giải lít cốt nào anh em :arggg:`
+                    : "Không ai đăng ký à, vậy khỏi tag :doubt:";
+
     let emoji = getEmojiForDifficulty(data.question.difficulty);
 
     const blocks = [
@@ -316,6 +326,13 @@ async function sendDailyProblem() {
             "text": {
                 "type": "mrkdwn",
                 "text": "Bạn đã làm xong bài hôm nay chưa? Điểm danh nào"
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+				"text": `${subscriberMentioningMessage}`
             }
         },
         {
@@ -358,6 +375,65 @@ async function sendDailyProblem() {
     await sleep(1000);
 
     sendMessage(solutionBlocks);
+}
+
+async function handleSubscribe(userId: string) {
+    const subscriberAccounts = await getSubscriberAccounts();
+
+    if (userId.length == 0 || subscriberAccounts.includes(userId)) {
+        return new Response(JSON.stringify({
+            "response_type": "ephemeral",
+            "text": "Invalid request!"
+        }), {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+
+    subscriberAccounts.push(userId);
+    await kv.set(["subscriberKey"], subscriberAccounts);
+
+    return new Response(JSON.stringify({
+        "response_type": "ephemeral",
+        "text": "Ôkê rồi nha! Giờ bạn sẽ bị dí mỗi ngày :ehehe:"
+    }), {
+        status: 200,
+        headers: {
+            "content-type": "application/json",
+        },
+    });
+}
+
+async function handleUnsubscribe(userId: string) {
+    const subscriberAccounts = await getSubscriberAccounts();
+
+    const index = subscriberAccounts.indexOf(userId);
+    if (index === -1) {
+        return new Response(JSON.stringify({
+            "response_type": "ephemeral",
+            "text": "Invalid request!"
+        }), {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+
+    subscriberAccounts.splice(index, 1);
+    await kv.set(["subscriberKey"], subscriberAccounts);
+
+    return new Response(JSON.stringify({
+        "response_type": "ephemeral",
+        "text": "Bạn sợ à :doubt:"
+    }), {
+        status: 200,
+        headers: {
+            "content-type": "application/json",
+        },
+    });
 }
 
 async function handleEnroll(payload: string) {
@@ -687,6 +763,20 @@ Deno.serve(async (req: Request) => {
     if (url.pathname == '/enroll' && req.method == 'POST') {
         const body = await req.text();
         return await handleEnroll(body);
+    }
+
+    if (url.pathname == "/subscribe" && req.method == 'POST') {
+        const body = await req.text();
+        const params = new URLSearchParams(body);
+        const userId = params.get('user_id') ?? "";
+        return await handleSubscribe(userId);
+    }
+
+    if (url.pathname == "/unsubscribe" && req.method == 'POST') {
+        const body = await req.text();
+        const params = new URLSearchParams(body);
+        const userId = params.get('user_id') ?? "";
+        return await handleUnsubscribe(userId);
     }
 
     if (url.pathname == '/challenge' && req.method == 'POST') {
