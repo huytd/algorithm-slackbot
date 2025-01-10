@@ -581,8 +581,8 @@ async function verifySubmission(requestText: string) {
     }
 
 
+    const userName = leetcodeAccountMap[userId];
     if (isDaily) {
-        const userName = leetcodeAccountMap[userId];
         if (currentFinishers.filter(x => x.length > 0).length < 3) {
             message = `:first_place_medal: ${userName} đã giải xong bài!`;
         } else if (hourDiff <= 3) {
