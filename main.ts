@@ -582,17 +582,18 @@ async function verifySubmission(requestText: string) {
 
 
     if (isDaily) {
+        const userName = leetcodeAccountMap[userId];
         if (currentFinishers.filter(x => x.length > 0).length < 3) {
-            message = `:first_place_medal: <@${userId}> đã giải xong bài!`;
+            message = `:first_place_medal: ${userName} đã giải xong bài!`;
         } else if (hourDiff <= 3) {
-            message = `:second_place_medal: <@${userId}> đã giải xong bài!`;
+            message = `:second_place_medal: ${userName} đã giải xong bài!`;
         } else if (hourDiff > 3 && hourDiff <= 6) {
-            message = `:third_place_medal: <@${userId}> đã giải xong bài!`;
+            message = `:third_place_medal: ${userName} đã giải xong bài!`;
         } else {
-            message = `:kissing_heart: <@${userId}> đã nhận được một nụ hun khích lệ!`;
+            message = `:kissing_heart: ${userName} đã nhận được một nụ hun khích lệ!`;
         }
     } else {
-        message = `:white_check_mark: <@${userId}> đã giải xong bài!`;
+        message = `:white_check_mark: ${userName} đã giải xong bài!`;
     }
 
     const timeString = new Intl.DateTimeFormat('vi-VN', {
@@ -828,3 +829,4 @@ Deno.serve(async (req: Request) => {
         },
     });
 });
+
